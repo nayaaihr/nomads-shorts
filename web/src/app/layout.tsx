@@ -14,9 +14,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nomads Shorts — Turn long videos into viral shorts",
+  metadataBase: new URL("https://www.nomadsshorts.com"),
+  title: {
+    default: "Nomads Shorts — Vertical clips from your travel vlogs, in minutes",
+    template: "%s · Nomads Shorts",
+  },
   description:
-    "Paste a YouTube URL and get vertical, captioned short clips ready for Shorts, Reels, and TikTok.",
+    "Built for travel creators. Paste a YouTube URL — get 5–10 vertical short clips ready to post on Reels, Shorts and TikTok. No editor to learn.",
+  openGraph: {
+    title: "Nomads Shorts — Vertical clips from your travel vlogs, in minutes",
+    description:
+      "Paste a YouTube URL. AI picks the best moments, reframes them for vertical. Ready to post in minutes.",
+    url: "https://www.nomadsshorts.com",
+    siteName: "Nomads Shorts",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nomads Shorts",
+    description:
+      "Paste a YouTube URL. Get 5–10 vertical shorts ready to post. Made for travel creators.",
+  },
 };
 
 export default function RootLayout({

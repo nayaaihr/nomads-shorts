@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Scissors, LayoutDashboard, Video, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Video, CreditCard, LogOut } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { getUserOrRedirect } from "@/lib/supabase/session";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,7 +30,7 @@ export default async function DashboardLayout({
       <aside className="hidden md:flex w-60 shrink-0 border-r bg-card flex-col">
         <div className="h-14 flex items-center px-6 border-b">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Scissors className="size-5" />
+            <LogoMark className="size-5" />
             <span>Nomads Shorts</span>
           </Link>
         </div>

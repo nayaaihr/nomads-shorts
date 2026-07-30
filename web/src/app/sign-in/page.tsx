@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Scissors } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { SignInForm } from "./sign-in-form";
 
 type SearchParams = { next?: string; error?: string };
@@ -16,7 +16,7 @@ export default async function SignInPage(props: {
           href="/"
           className="flex items-center gap-2 justify-center font-semibold mb-8"
         >
-          <Scissors className="size-5" />
+          <LogoMark className="size-5" />
           <span>Nomads Shorts</span>
         </Link>
         <div className="rounded-lg border bg-card p-6 shadow-sm">
