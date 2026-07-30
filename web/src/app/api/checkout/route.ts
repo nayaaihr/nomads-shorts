@@ -34,18 +34,39 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
-  let customerId = profile?.stripe_customer_id ?? null;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
+  // Resolve a valid Stripe customer for this user.
+  //
+  // The saved stripe_customer_id can be stale — most common cause is a
+  // customer created in TEST mode that no longer exists when the app
+  // switches to LIVE mode (test and live customer pools are separate).
+  // Verify it exists in the currently-active mode; if not, create a fresh
+  // one and update the profile.
+  async function ensureCustomer(): Promise<string> {
+    const savedId = profile?.stripe_customer_id ?? null;
+    if (savedId) {
+      try {
+        const existing = await stripe.customers.retrieve(savedId);
+        if (existing && !("deleted" in existing && existing.deleted)) {
+          return savedId;
+        }
+      } catch (err) {
+        // resource_missing / no such customer — fall through and recreate.
+        const code = (err as { code?: string })?.code;
+        if (code && code !== "resource_missing") throw err;
+      }
+    }
+    const created = await stripe.customers.create({
       email: user.email ?? profile?.email ?? undefined,
       metadata: { supabase_user_id: user.id },
     });
-    customerId = customer.id;
     await admin
       .from("profiles")
-      .update({ stripe_customer_id: customerId })
+      .update({ stripe_customer_id: created.id })
       .eq("id", user.id);
+    return created.id;
   }
+
+  const customerId = await ensureCustomer();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
