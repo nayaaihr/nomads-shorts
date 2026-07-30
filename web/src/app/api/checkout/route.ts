@@ -39,34 +39,35 @@ export async function POST(request: Request) {
   // The saved stripe_customer_id can be stale — most common cause is a
   // customer created in TEST mode that no longer exists when the app
   // switches to LIVE mode (test and live customer pools are separate).
-  // Verify it exists in the currently-active mode; if not, create a fresh
-  // one and update the profile.
-  async function ensureCustomer(): Promise<string> {
-    const savedId = profile?.stripe_customer_id ?? null;
-    if (savedId) {
-      try {
-        const existing = await stripe.customers.retrieve(savedId);
-        if (existing && !("deleted" in existing && existing.deleted)) {
-          return savedId;
-        }
-      } catch (err) {
-        // resource_missing / no such customer — fall through and recreate.
-        const code = (err as { code?: string })?.code;
-        if (code && code !== "resource_missing") throw err;
+  // Verify it exists; if not, create a fresh one and update the profile.
+  const userId = user.id;
+  const userEmail = user.email ?? profile?.email ?? undefined;
+  const savedId = profile?.stripe_customer_id ?? null;
+
+  let customerId: string | null = null;
+  if (savedId) {
+    try {
+      const existing = await stripe.customers.retrieve(savedId);
+      if (existing && !("deleted" in existing && existing.deleted)) {
+        customerId = savedId;
       }
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code && code !== "resource_missing") throw err;
+      // Otherwise fall through: recreate below.
     }
+  }
+  if (!customerId) {
     const created = await stripe.customers.create({
-      email: user.email ?? profile?.email ?? undefined,
-      metadata: { supabase_user_id: user.id },
+      email: userEmail,
+      metadata: { supabase_user_id: userId },
     });
+    customerId = created.id;
     await admin
       .from("profiles")
-      .update({ stripe_customer_id: created.id })
-      .eq("id", user.id);
-    return created.id;
+      .update({ stripe_customer_id: customerId })
+      .eq("id", userId);
   }
-
-  const customerId = await ensureCustomer();
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
