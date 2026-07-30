@@ -1,0 +1,15 @@
+node_modules
+.next
+.vercel
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+Dockerfile
+.dockerignore
+fly.toml
+README.md
+supabase
+*.log
+.DS_Store
