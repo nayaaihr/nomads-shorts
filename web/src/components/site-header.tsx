@@ -12,14 +12,20 @@ export function SiteHeader({ signedIn = false }: { signedIn?: boolean }) {
         </Link>
         <nav className="flex items-center gap-2 text-sm">
           <Link
+            href="/demo"
+            className="hidden sm:inline-block px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Demo
+          </Link>
+          <Link
             href="/#features"
-            className="px-3 py-2 text-muted-foreground hover:text-foreground"
+            className="hidden sm:inline-block px-3 py-2 text-muted-foreground hover:text-foreground"
           >
             Features
           </Link>
           <Link
             href="/#pricing"
-            className="px-3 py-2 text-muted-foreground hover:text-foreground"
+            className="hidden sm:inline-block px-3 py-2 text-muted-foreground hover:text-foreground"
           >
             Pricing
           </Link>

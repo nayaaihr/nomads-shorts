@@ -18,6 +18,7 @@ import {
   Zap,
   Clock,
   Globe2,
+  PlayCircle,
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -57,10 +58,11 @@ export default async function LandingPage() {
                   Try it free
                 </Link>
                 <Link
-                  href="#how-it-works"
+                  href="/demo"
                   className={buttonVariants({ size: "lg", variant: "outline" })}
                 >
-                  See how it works
+                  <PlayCircle className="size-4 mr-1" />
+                  Watch demo
                 </Link>
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
