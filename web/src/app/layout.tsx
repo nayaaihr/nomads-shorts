@@ -36,6 +36,9 @@ export const metadata: Metadata = {
     description:
       "Paste a YouTube URL. Get 5–10 vertical shorts ready to post. Made for travel creators.",
   },
+  verification: {
+    google: "XG8evNn5fYZ5--hmafDVtYBcOgmbBQuBnxVkYOhOs8Q",
+  },
 };
 
 export default function RootLayout({
