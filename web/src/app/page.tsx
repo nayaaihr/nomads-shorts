@@ -23,6 +23,7 @@ import {
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { VerticalPreview } from "@/components/vertical-preview";
+import { LandingJsonLd } from "@/components/json-ld";
 import { CREDIT_PACKS, FREE_TRIAL_CREDITS } from "@/lib/pricing";
 import { getUser } from "@/lib/supabase/session";
 
@@ -31,6 +32,7 @@ export default async function LandingPage() {
 
   return (
     <>
+      <LandingJsonLd />
       <SiteHeader signedIn={Boolean(user)} />
 
       <main className="flex-1">

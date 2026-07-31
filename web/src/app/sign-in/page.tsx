@@ -2,6 +2,12 @@ import Link from "next/link";
 import { LogoMark } from "@/components/logo";
 import { SignInForm } from "./sign-in-form";
 
+export const metadata = {
+  title: "Sign in",
+  description:
+    "Sign in to Nomads Shorts with Google to turn your long travel vlogs into short vertical clips.",
+};
+
 type SearchParams = { next?: string; error?: string };
 
 export default async function SignInPage(props: {
