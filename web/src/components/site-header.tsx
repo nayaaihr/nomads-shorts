@@ -30,6 +30,12 @@ export function SiteHeader({ signedIn = false }: { signedIn?: boolean }) {
             Pricing
           </Link>
           <Link
+            href="/blog"
+            className="hidden md:inline-block px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Blog
+          </Link>
+          <Link
             href={signedIn ? "/dashboard" : "/sign-in"}
             className={buttonVariants({ size: "sm" })}
           >
