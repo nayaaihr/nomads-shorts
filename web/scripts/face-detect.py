@@ -54,8 +54,32 @@ def main():
     if not cap.isOpened():
         _fail(f"cv2.VideoCapture could not open: {video_path}")
 
-    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    # Resolve the Haar cascade XML path across OpenCV versions.
+    # OpenCV 4.x exposes cv2.data.haarcascades. Newer/stripped builds may
+    # not — fall back to well-known filesystem locations shipped with
+    # opencv-python(-headless).
+    cascade_name = "haarcascade_frontalface_default.xml"
+    cascade_path = None
+    if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+        cascade_path = cv2.data.haarcascades + cascade_name
+        if not os.path.exists(cascade_path):
+            cascade_path = None
+    if not cascade_path:
+        # Search common install locations.
+        try:
+            import cv2 as _cv2mod
+            base = os.path.join(os.path.dirname(_cv2mod.__file__), "data")
+            candidate = os.path.join(base, cascade_name)
+            if os.path.exists(candidate):
+                cascade_path = candidate
+        except Exception:
+            pass
+    if not cascade_path:
+        _fail(f"could not locate {cascade_name} in this OpenCV install")
+
     cascade = cv2.CascadeClassifier(cascade_path)
+    if cascade.empty():
+        _fail(f"cascade classifier loaded but is empty: {cascade_path}")
 
     results = []
     for t in timestamps:

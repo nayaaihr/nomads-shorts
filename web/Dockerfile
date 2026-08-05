@@ -27,8 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --break-system-packages needed on Bookworm+ due to PEP 668.
 RUN pip3 install --no-cache-dir --break-system-packages \
       yt-dlp \
-      opencv-python-headless \
-      numpy
+      "opencv-python-headless<5" \
+      "numpy<2"
 
 # ---------- deps stage ----------
 FROM base AS deps
