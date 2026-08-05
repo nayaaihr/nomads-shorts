@@ -32,6 +32,15 @@ export async function downloadYouTube(
     "--no-playlist",
     "--restrict-filenames",
     "--no-progress",
+    // Also fetch subtitles when available. Manual subs preferred over
+    // auto-generated. If we get any, we can skip the Whisper transcription
+    // call entirely — big cost savings. See parseVTTFile / findCaptionFile
+    // in youtube-captions.ts.
+    "--write-subs",
+    "--write-auto-subs",
+    "--sub-langs", "en.*,en,hi.*,hi",
+    "--sub-format", "vtt/best",
+    "--convert-subs", "vtt",
     "--print", "after_move:%(filepath)s\t%(title)s\t%(duration)s\t%(uploader)s",
     "-o", outPath,
     youtubeUrl,

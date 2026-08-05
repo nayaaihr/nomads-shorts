@@ -6,6 +6,7 @@ import { downloadYouTube } from "@/lib/pipeline/download";
 import { extractAudio, renderVerticalClip } from "@/lib/pipeline/ffmpeg";
 import { transcribeFromUrl } from "@/lib/pipeline/transcribe";
 import { translateSegmentsToEnglish } from "@/lib/pipeline/translate";
+import { findCaptionFile, parseVTTFile } from "@/lib/pipeline/youtube-captions";
 import { pickMoments } from "@/lib/pipeline/pick-moments";
 import { workDir } from "@/lib/pipeline/paths";
 import { uploadFromPath, signedGetUrl, r2Keys } from "@/lib/r2";
@@ -67,26 +68,37 @@ export const processVideo = inngest.createFunction(
     }
 
     // ---------------------------------------------------------------
-    // 2. Extract audio + upload to R2 so Replicate can fetch it.
+    // 2 + 3. Get transcript. Try YouTube's own captions first (free,
+    //        instant); fall back to Whisper via Replicate if the video
+    //        doesn't have captions. yt-dlp already fetched any available
+    //        captions during download-source.
     // ---------------------------------------------------------------
-    const audioUrl = await step.run("transcribe-upload-audio", async () => {
-      await setStatus("transcribing", "Extracting audio");
+    const rawTranscript = await step.run("get-transcript", async () => {
+      await setStatus("transcribing", "Looking for captions");
+      const caption = await findCaptionFile(meta.filePath);
+      if (caption) {
+        // Fast path: parse VTT, no Replicate call.
+        await setStatus(
+          "transcribing",
+          `Using YouTube captions (${caption.language})`,
+        );
+        const t = await parseVTTFile(caption.path, caption.language);
+        // Backfill duration from source if the VTT ended mid-video.
+        if (t.durationSeconds < meta.durationSeconds - 5) {
+          t.durationSeconds = meta.durationSeconds;
+        }
+        return t;
+      }
+
+      // Slow path: extract audio → upload → Whisper.
+      await setStatus("transcribing", "Transcribing with Whisper");
       const audioPath = await extractAudio(videoId, meta.filePath);
       const audioKey = r2Keys.audio(videoId);
       await uploadFromPath(audioKey, audioPath, "audio/mp4");
-      // Signed URL long enough to outlive Replicate's queue + inference.
-      return signedGetUrl(audioKey, 60 * 60);
-    });
-
-    // ---------------------------------------------------------------
-    // 3. Whisper transcription.
-    // ---------------------------------------------------------------
-    const rawTranscript = await step.run("transcribe-audio", async () => {
-      await setStatus("transcribing", "Transcribing with Whisper");
-      const t = await transcribeFromUrl(audioUrl, {
+      const audioUrl = await signedGetUrl(audioKey, 60 * 60);
+      return transcribeFromUrl(audioUrl, {
         durationSeconds: meta.durationSeconds,
       });
-      return t;
     });
 
     // Translate to English if needed. No-op for already-English videos.
