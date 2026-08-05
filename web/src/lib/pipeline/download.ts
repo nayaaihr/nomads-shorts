@@ -42,13 +42,21 @@ export async function downloadYouTube(
     "--no-progress",
     // Also fetch subtitles when available. Manual subs preferred over
     // auto-generated. If we get any, we can skip the Whisper transcription
-    // call entirely — big cost savings. See parseVTTFile / findCaptionFile
-    // in youtube-captions.ts.
+    // call entirely — big cost savings.
+    //
+    // Only request English variants. Hindi subs were causing HTTP 429
+    // rate-limit errors from YouTube. Hindi source videos will fall
+    // through to Whisper via the /get-transcript step, which already
+    // handles that path.
+    //
+    // --no-abort-on-error keeps the video download alive even if any
+    // sub-language 4xx's (transient rate-limiting, etc.).
     "--write-subs",
     "--write-auto-subs",
-    "--sub-langs", "en.*,en,hi.*,hi",
+    "--sub-langs", "en.*,en",
     "--sub-format", "vtt/best",
     "--convert-subs", "vtt",
+    "--no-abort-on-error",
     "--print", "after_move:%(filepath)s\t%(title)s\t%(duration)s\t%(uploader)s",
     "-o", outPath,
     youtubeUrl,

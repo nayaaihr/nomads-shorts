@@ -12,14 +12,23 @@
 FROM node:24-slim AS base
 
 # System deps: ffmpeg for video, yt-dlp for downloads, ca-certs for HTTPS,
-# python3-pip because yt-dlp is Python.
+# python3-pip because yt-dlp is Python. unzip is needed by the deno
+# installer we run next.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       ffmpeg \
       python3 \
       python3-pip \
       curl \
+      unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Deno as a JavaScript runtime for yt-dlp's YouTube extractor. YouTube's
+# newer format signatures require executing YouTube's own JS — without a
+# runtime available, yt-dlp warns and may fail to see some formats.
+# Install to /usr/local/bin so it's on PATH for the yt-dlp subprocess.
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+    && chmod +x /usr/local/bin/deno
 
 # yt-dlp via pip so we get the latest release (Debian's apt version lags).
 # opencv-python-headless powers the face-tracking reframe (no GUI deps
