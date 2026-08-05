@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { getUserOrRedirect } from "@/lib/supabase/session";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Video } from "lucide-react";
+import { LibraryList } from "./library-list";
+
+export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
   const user = await getUserOrRedirect();
@@ -15,6 +17,8 @@ export default async function LibraryPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
+  const list = videos ?? [];
+
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight">My clips</h1>
@@ -22,7 +26,7 @@ export default async function LibraryPage() {
         Every video you&apos;ve submitted and the clips generated from it.
       </p>
 
-      {(!videos || videos.length === 0) ? (
+      {list.length === 0 ? (
         <Card className="mt-8 border-dashed">
           <CardContent className="py-16 text-center">
             <Video className="size-8 mx-auto text-muted-foreground" />
@@ -40,29 +44,7 @@ export default async function LibraryPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="mt-8 grid gap-3">
-          {videos.map((v) => (
-            <Link key={v.id} href={`/dashboard/videos/${v.id}`}>
-              <Card className="hover:border-primary/50 transition-colors">
-                <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <div className="min-w-0">
-                    <CardTitle className="text-base truncate">
-                      {v.title ?? v.source_url}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(v.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={v.status === "ready" ? "default" : "secondary"}
-                  >
-                    {v.status}
-                  </Badge>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <LibraryList initialVideos={list} />
       )}
     </>
   );
