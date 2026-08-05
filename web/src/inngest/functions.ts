@@ -87,6 +87,9 @@ export const processVideo = inngest.createFunction(
         if (t.durationSeconds < meta.durationSeconds - 5) {
           t.durationSeconds = meta.durationSeconds;
         }
+        logger.info(
+          `[transcript-source] youtube-captions (${caption.language}), ${t.segments.length} segments, video ${videoId}`,
+        );
         return t;
       }
 
@@ -96,9 +99,13 @@ export const processVideo = inngest.createFunction(
       const audioKey = r2Keys.audio(videoId);
       await uploadFromPath(audioKey, audioPath, "audio/mp4");
       const audioUrl = await signedGetUrl(audioKey, 60 * 60);
-      return transcribeFromUrl(audioUrl, {
+      const t = await transcribeFromUrl(audioUrl, {
         durationSeconds: meta.durationSeconds,
       });
+      logger.info(
+        `[transcript-source] whisper (${t.language}), ${t.segments.length} segments, video ${videoId}`,
+      );
+      return t;
     });
 
     // Translate to English if needed. No-op for already-English videos.
