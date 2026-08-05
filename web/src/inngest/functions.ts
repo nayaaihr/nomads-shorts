@@ -11,9 +11,13 @@ import {
 import { transcribeFromUrl } from "@/lib/pipeline/transcribe";
 import { translateSegmentsToEnglish } from "@/lib/pipeline/translate";
 import { findCaptionFile, parseVTTFile } from "@/lib/pipeline/youtube-captions";
+import {
+  persistSourceToR2,
+  ensureSourceLocal,
+} from "@/lib/pipeline/source-persistence";
 import { pickMoments } from "@/lib/pipeline/pick-moments";
 import { workDir } from "@/lib/pipeline/paths";
-import { uploadFromPath, signedGetUrl, r2Keys } from "@/lib/r2";
+import { uploadFromPath, signedGetUrl, r2Keys, deleteObject } from "@/lib/r2";
 
 // The top-level pipeline. Each `step.run` boundary is a durable checkpoint:
 // if any step fails, Inngest retries from that step, not from scratch.
@@ -59,6 +63,9 @@ export const processVideo = inngest.createFunction(
           duration_seconds: Math.round(dl.durationSeconds),
         })
         .eq("id", videoId);
+      // Mirror the downloaded source to R2 so later steps can restore
+      // it if the machine reboots and wipes local /tmp.
+      await persistSourceToR2(videoId, dl.filePath);
       return { filePath: dl.filePath, durationSeconds: dl.durationSeconds };
     });
 
@@ -79,7 +86,10 @@ export const processVideo = inngest.createFunction(
     // ---------------------------------------------------------------
     const rawTranscript = await step.run("get-transcript", async () => {
       await setStatus("transcribing", "Looking for captions");
-      const caption = await findCaptionFile(meta.filePath);
+      // Make sure the source file is on disk — restore from R2 if the
+      // machine restarted since download-source.
+      const sourcePath = await ensureSourceLocal(videoId);
+      const caption = await findCaptionFile(sourcePath);
       if (caption) {
         // Fast path: parse VTT, no Replicate call.
         await setStatus(
@@ -87,7 +97,6 @@ export const processVideo = inngest.createFunction(
           `Using YouTube captions (${caption.language})`,
         );
         const t = await parseVTTFile(caption.path, caption.language);
-        // Backfill duration from source if the VTT ended mid-video.
         if (t.durationSeconds < meta.durationSeconds - 5) {
           t.durationSeconds = meta.durationSeconds;
         }
@@ -99,7 +108,7 @@ export const processVideo = inngest.createFunction(
 
       // Slow path: extract audio → upload → Whisper.
       await setStatus("transcribing", "Transcribing with Whisper");
-      const audioPath = await extractAudio(videoId, meta.filePath);
+      const audioPath = await extractAudio(videoId, sourcePath);
       const audioKey = r2Keys.audio(videoId);
       await uploadFromPath(audioKey, audioPath, "audio/mp4");
       const audioUrl = await signedGetUrl(audioKey, 60 * 60);
@@ -156,10 +165,12 @@ export const processVideo = inngest.createFunction(
       const pick = picks[i];
       await step.run(`render-clip-${i}`, async () => {
         const clipId = randomUUID();
+        // Restore source from R2 if this render happens on a fresh machine.
+        const sourcePath = await ensureSourceLocal(videoId);
         const outPath = await renderVerticalClip(
           videoId,
           clipId,
-          meta.filePath,
+          sourcePath,
           transcript,
           pick.start_seconds,
           pick.end_seconds,
@@ -260,8 +271,12 @@ export const processVideo = inngest.createFunction(
       try {
         await rm(workDir(videoId), { recursive: true, force: true });
       } catch {
-        // Ignore.
+        // Ignore local rm errors.
       }
+      // Remove the persisted R2 source now that all clips are rendered.
+      // Audio (if any) can stick around — it's small and might be useful
+      // for a re-transcribe later.
+      await deleteObject(r2Keys.source(videoId)).catch(() => {});
     });
 
     return { ok: true, clips: picks.length };
