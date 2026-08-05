@@ -39,6 +39,7 @@ type Clip = {
   end_seconds: number;
   virality_score: number | null;
   storage_key: string | null;
+  thumbnail_key: string | null;
   ordinal: number;
 };
 
@@ -181,7 +182,8 @@ function ClipCard({ clip, onDelete }: { clip: Clip; onDelete: () => void }) {
       {clip.storage_key ? (
         <video
           controls
-          preload="metadata"
+          preload="none"
+          poster={clip.thumbnail_key ? `/api/clips/${clip.id}/thumbnail` : undefined}
           className="w-full aspect-[9/16] bg-black object-contain"
           src={`/api/clips/${clip.id}/download`}
         />

@@ -18,6 +18,29 @@ const FFMPEG = process.env.NOMADS_FFMPEG_BIN || "ffmpeg";
 // to re-enable while debugging.
 const CAPTIONS_ENABLED = process.env.NOMADS_CAPTIONS === "on";
 
+// Extract a poster JPG from the middle of a rendered vertical clip.
+// Used as the <video poster> so the clip card shows a still without
+// pulling the whole mp4 on page load. Small (JPEG q=3, ~540x960 max).
+export async function extractClipThumbnail(
+  videoId: string,
+  clipId: string,
+  clipPath: string,
+  clipDurationSeconds: number,
+): Promise<string> {
+  const outPath = join(workDir(videoId), `clip-${clipId}.jpg`);
+  const middle = Math.max(0.1, clipDurationSeconds / 2);
+  await runCommand(FFMPEG, [
+    "-y",
+    "-ss", middle.toFixed(3),
+    "-i", clipPath,
+    "-frames:v", "1",
+    "-vf", "scale=540:-2",
+    "-q:v", "3",
+    outPath,
+  ]);
+  return outPath;
+}
+
 // Extract audio-only from the source video, mono, downsampled to 16 kHz —
 // smaller upload to Replicate, still perfect for Whisper.
 export async function extractAudio(

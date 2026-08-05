@@ -3,7 +3,11 @@ import { rm, stat } from "node:fs/promises";
 import { inngest } from "./client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadYouTube } from "@/lib/pipeline/download";
-import { extractAudio, renderVerticalClip } from "@/lib/pipeline/ffmpeg";
+import {
+  extractAudio,
+  extractClipThumbnail,
+  renderVerticalClip,
+} from "@/lib/pipeline/ffmpeg";
 import { transcribeFromUrl } from "@/lib/pipeline/transcribe";
 import { translateSegmentsToEnglish } from "@/lib/pipeline/translate";
 import { findCaptionFile, parseVTTFile } from "@/lib/pipeline/youtube-captions";
@@ -163,6 +167,22 @@ export const processVideo = inngest.createFunction(
         const clipKey = r2Keys.clip(videoId, clipId);
         await uploadFromPath(clipKey, outPath, "video/mp4");
 
+        // Best-effort thumbnail. If ffmpeg fails on this we still keep
+        // the clip — the UI falls back to a black poster.
+        let thumbKey: string | null = null;
+        try {
+          const thumbPath = await extractClipThumbnail(
+            videoId,
+            clipId,
+            outPath,
+            pick.end_seconds - pick.start_seconds,
+          );
+          thumbKey = r2Keys.thumbnail(videoId, clipId);
+          await uploadFromPath(thumbKey, thumbPath, "image/jpeg");
+        } catch {
+          thumbKey = null;
+        }
+
         await admin.from("clips").insert({
           id: clipId,
           video_id: videoId,
@@ -174,6 +194,7 @@ export const processVideo = inngest.createFunction(
           end_seconds: pick.end_seconds,
           virality_score: pick.virality_score,
           storage_key: clipKey,
+          thumbnail_key: thumbKey,
         });
       });
     }

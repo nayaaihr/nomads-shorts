@@ -27,7 +27,7 @@ export async function GET(
 
   const { data: clips } = await supabase
     .from("clips")
-    .select("id, title, hook, start_seconds, end_seconds, virality_score, storage_key, ordinal")
+    .select("id, title, hook, start_seconds, end_seconds, virality_score, storage_key, thumbnail_key, ordinal")
     .eq("video_id", id)
     .order("ordinal");
 

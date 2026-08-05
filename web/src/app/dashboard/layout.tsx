@@ -5,6 +5,7 @@ import { getUserOrRedirect } from "@/lib/supabase/session";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { MobileNav } from "./mobile-nav";
 
 export default async function DashboardLayout({
   children,
@@ -26,7 +27,16 @@ export default async function DashboardLayout({
   const initials = (displayName?.[0] ?? "?").toUpperCase();
 
   return (
-    <div className="flex-1 flex">
+    <div className="flex-1 flex flex-col md:flex-row">
+      {/* Mobile top bar + drawer (below md) */}
+      <MobileNav
+        displayName={displayName ?? ""}
+        email={user.email ?? ""}
+        avatarUrl={profile?.avatar_url ?? null}
+        credits={credits}
+      />
+
+      {/* Desktop sidebar (md and up) */}
       <aside className="hidden md:flex w-60 shrink-0 border-r bg-card flex-col">
         <div className="h-14 flex items-center px-6 border-b">
           <Link href="/" className="flex items-center gap-2 font-semibold">
