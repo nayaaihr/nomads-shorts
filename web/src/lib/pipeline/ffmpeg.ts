@@ -3,6 +3,11 @@ import { unlink } from "node:fs/promises";
 import { runCommand } from "./spawn";
 import { workDir } from "./paths";
 import { writeAssForRange } from "./captions";
+import {
+  detectFacesAt,
+  computeCropOffsetX,
+  samplingTimestamps,
+} from "./face-detect";
 import type { Transcript } from "./transcript";
 
 const FFMPEG = process.env.NOMADS_FFMPEG_BIN || "ffmpeg";
@@ -33,13 +38,18 @@ export async function extractAudio(
   return outPath;
 }
 
-// Cut [start, end] from the source, crop to a centered 9:16 window,
-// scale to 1080x1920, burn in styled captions from the transcript.
+// Cut [start, end] from the source, crop to a 9:16 window centered on the
+// detected speaker (falls back to center if no face detected), scale to
+// 1080x1920, optionally burn captions.
 //
-// Reframe strategy: center crop. Simple, no external model, works well
-// for talking-head content where the speaker sits center-frame. A real
-// face-tracked crop is a later upgrade (probably OpenCV + a smoothing
-// filter over face bboxes).
+// Reframe strategy: static per-clip face-tracked crop.
+//   1. Sample ~5 frames from the clip window via OpenCV
+//   2. Take the weighted average x-position of the largest face per sample
+//   3. Use that as the crop's horizontal offset (clamped to source bounds)
+//   4. If no faces detected → fall back to center crop
+//
+// Cost: ~0.5–2 seconds of face detection per clip, up front. Meaningfully
+// better framing on any talking-head content.
 export async function renderVerticalClip(
   videoId: string,
   clipId: string,
@@ -58,31 +68,36 @@ export async function renderVerticalClip(
   // Silence unused-arg lint when captions off.
   void transcript;
 
-  // -ss BEFORE -i: fast seek (keyframe granularity), then -ss AFTER -i is
-  // dropped in favor of frame-accurate copy via re-encode. We're
-  // re-encoding anyway (crop + captions) so accuracy is preserved.
-  //
-  // Filter chain:
-  //   crop = ih*9/16 : ih         → center-crop to 9:16
-  //   scale = 1080:1920           → normalize to output resolution
-  //   ass = <file>                → burn subtitles
-  const duration = endSeconds - startSeconds;
-  // Center crop to 9:16, then scale to 1080x1920, then burn captions.
-  // No commas inside any single filter expression (ffmpeg's filter graph
-  // parser treats top-level commas as filter separators, so a comma inside
-  // a crop expression would break the chain).
-  //
-  // Tradeoff: source content at the far left/right of the frame (including
-  // burned-in text/graphics near the edges) gets cropped off. This is the
-  // expected behavior for "fill the frame" mode.
+  // Face detection — sample 5 evenly-spaced frames in the clip window.
+  const samples = await detectFacesAt(
+    sourcePath,
+    samplingTimestamps(startSeconds, endSeconds, 5),
+  );
+
+  // Compute per-clip crop parameters. If OpenCV came back empty (no faces,
+  // or opencv-python not installed) we fall back to the ffmpeg expression
+  // that centers within iw at render time.
+  let cropExpr = "crop=ih*9/16:ih:(iw-ih*9/16)/2:0";
+  const firstWithDims = samples.find((s) => s.w > 0 && s.h > 0);
+  if (firstWithDims) {
+    const sourceW = firstWithDims.w;
+    const sourceH = firstWithDims.h;
+    const cropW = Math.round(sourceH * 9 / 16);
+    const offsetX = computeCropOffsetX(samples, cropW, sourceW);
+    if (offsetX !== null) {
+      cropExpr = `crop=${cropW}:${sourceH}:${Math.round(offsetX)}:0`;
+    }
+  }
+
   const filterSteps = [
-    "crop=ih*9/16:ih:(iw-ih*9/16)/2:0",
+    cropExpr,
     "scale=1080:1920",
   ];
   if (CAPTIONS_ENABLED) {
     filterSteps.push(`ass=${escapeForFilter(assPath)}`);
   }
   const filter = filterSteps.join(",");
+  const duration = endSeconds - startSeconds;
 
   // Two-stage seek: cheap fast-seek to ~5s before the target (jumps by
   // keyframe), then frame-accurate seek within the input to the exact

@@ -22,8 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp via pip so we get the latest release (Debian's apt version lags).
+# opencv-python-headless powers the face-tracking reframe (no GUI deps
+# needed — we only use it programmatically).
 # --break-system-packages needed on Bookworm+ due to PEP 668.
-RUN pip3 install --no-cache-dir --break-system-packages yt-dlp
+RUN pip3 install --no-cache-dir --break-system-packages \
+      yt-dlp \
+      opencv-python-headless \
+      numpy
 
 # ---------- deps stage ----------
 FROM base AS deps
@@ -53,6 +58,9 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./next.config.ts
+# Python scripts (face-detect.py) — sit next to node_modules so relative
+# path resolution works. Path referenced by src/lib/pipeline/face-detect.ts.
+COPY --from=build /app/scripts ./scripts
 
 EXPOSE 3000
 CMD ["npm", "start"]
