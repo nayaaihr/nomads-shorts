@@ -121,7 +121,14 @@ export const processVideo = inngest.createFunction(
     // 5. Render each pick as a vertical mp4 with captions, upload to R2,
     //    write a clips row.
     // ---------------------------------------------------------------
-    await setStatus("clipping", `Rendering ${picks.length} clip(s)`);
+    // IMPORTANT: setStatus wrapped in step.run so it only executes once.
+    // Anything outside step.run re-runs on every Inngest replay, including
+    // the replay that runs `cleanup` after `finalize` — which was
+    // overwriting the "ready" status back to "clipping" (real bug we hit
+    // in production).
+    await step.run("mark-clipping", async () => {
+      await setStatus("clipping", `Rendering ${picks.length} clip(s)`);
+    });
     for (let i = 0; i < picks.length; i++) {
       const pick = picks[i];
       await step.run(`render-clip-${i}`, async () => {
