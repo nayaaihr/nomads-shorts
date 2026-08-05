@@ -14,10 +14,18 @@ export type DownloadedVideo = {
   uploader?: string;
 };
 
-// Cap to 1080p mp4 to keep source sizes reasonable. YouTube shorts feeds
-// don't benefit from higher.
-const FORMAT =
-  "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]";
+// Cap to 1080p H.264 mp4. Explicitly prefer H.264 (vcodec^=avc1) over
+// newer codecs like AV1 because OpenCV on Debian slim can't decode AV1
+// in software fast enough — face detection returns empty frames on AV1
+// sources and we lose face-tracked reframing. Fallback formats keep
+// H.264 too where possible, then any 1080p as last resort.
+const FORMAT = [
+  "bestvideo[height<=1080][vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]",
+  "bestvideo[height<=1080][vcodec^=avc1]+bestaudio",
+  "best[height<=1080][vcodec^=avc1]",
+  "best[height<=1080][ext=mp4]",
+  "best[height<=1080]",
+].join("/");
 
 export async function downloadYouTube(
   videoId: string,        // OUR video id, used to namespace the tmp dir
