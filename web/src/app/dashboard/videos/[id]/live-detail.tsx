@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import JSZip from "jszip";
 import {
   Card,
   CardContent,
@@ -19,8 +20,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Trash2, Download } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, Download, Package, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/empty-state";
 
 type Video = {
   id: string;
@@ -51,11 +53,18 @@ type Props = {
 // Client-side live-updating detail view. Polls /api/videos/[id]/status
 // every 3s while the video is still processing, updates React state,
 // re-renders — no jarring page reload.
+type SortKey = "ordinal" | "score" | "length";
+
 export function LiveVideoDetail({ initialVideo, initialClips }: Props) {
   const router = useRouter();
   const [video, setVideo] = useState<Video>(initialVideo);
   const [clips, setClips] = useState<Clip[]>(initialClips);
   const [deleting, setDeleting] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>("ordinal");
+  const [zipping, setZipping] = useState(false);
+  // Track previous status so we can fire a one-shot "clips are ready!"
+  // toast the moment the pipeline flips from processing → ready.
+  const prevStatus = useRef(initialVideo.status);
 
   const isFinal = video.status === "ready" || video.status === "failed";
 
@@ -78,6 +87,19 @@ export function LiveVideoDetail({ initialVideo, initialClips }: Props) {
     return () => clearInterval(iv);
   }, [isFinal, video.id]);
 
+  // One-shot completion toast on status transition to "ready".
+  useEffect(() => {
+    if (prevStatus.current !== "ready" && video.status === "ready") {
+      const n = clips.length;
+      toast.success(
+        n > 0
+          ? `Your ${n} clip${n === 1 ? "" : "s"} ${n === 1 ? "is" : "are"} ready`
+          : "Video processing finished",
+      );
+    }
+    prevStatus.current = video.status;
+  }, [video.status, clips.length]);
+
   async function deleteVideo() {
     setDeleting(true);
     try {
@@ -88,6 +110,49 @@ export function LiveVideoDetail({ initialVideo, initialClips }: Props) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
       setDeleting(false);
+    }
+  }
+
+  // Client-side ZIP: fetch each clip's mp4 (via our auth-gated route,
+  // which 302s to R2), collect blobs in memory, hand a single .zip to
+  // the browser via a synthetic <a download>. Avoids server-side zipping
+  // (would time out on Vercel serverless).
+  async function downloadAllAsZip() {
+    if (readyClips.length === 0) return;
+    setZipping(true);
+    const t = toast.loading(`Preparing ${readyClips.length} clips…`);
+    try {
+      const zip = new JSZip();
+      let idx = 0;
+      for (const c of readyClips) {
+        idx++;
+        toast.loading(`Fetching clip ${idx} of ${readyClips.length}…`, { id: t });
+        const res = await fetch(`/api/clips/${c.id}/download`);
+        if (!res.ok) throw new Error(`Clip ${idx} failed to fetch`);
+        const blob = await res.blob();
+        const safeTitle = (c.title ?? `clip-${idx}`)
+          .replace(/[/\\?%*:|"<>]/g, "-")
+          .slice(0, 60);
+        zip.file(`${String(idx).padStart(2, "0")}-${safeTitle}.mp4`, blob);
+      }
+      toast.loading("Building zip file…", { id: t });
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeVideoTitle = (video.title ?? "shorts")
+        .replace(/[/\\?%*:|"<>]/g, "-")
+        .slice(0, 60);
+      a.download = `${safeVideoTitle}-shorts.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${readyClips.length} clips`, { id: t });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed", { id: t });
+    } finally {
+      setZipping(false);
     }
   }
 
@@ -106,6 +171,25 @@ export function LiveVideoDetail({ initialVideo, initialClips }: Props) {
   }
 
   const isProcessing = !isFinal;
+
+  // Filter to clips that actually have a storage_key (rendered), then sort
+  // according to the user's current pick.
+  const readyClips = clips.filter((c) => c.storage_key);
+  const sortedClips = [...readyClips].sort((a, b) => {
+    if (sortBy === "score") {
+      return (b.virality_score ?? 0) - (a.virality_score ?? 0);
+    }
+    if (sortBy === "length") {
+      return (
+        (b.end_seconds - b.start_seconds) - (a.end_seconds - a.start_seconds)
+      );
+    }
+    return a.ordinal - b.ordinal;
+  });
+  // Clips still rendering (no storage_key yet) always shown at the bottom
+  // in original order.
+  const pendingClips = clips.filter((c) => !c.storage_key);
+  const displayClips = [...sortedClips, ...pendingClips];
 
   return (
     <>
@@ -157,19 +241,55 @@ export function LiveVideoDetail({ initialVideo, initialClips }: Props) {
       )}
 
       {clips.length === 0 && video.status === "ready" && (
-        <Card className="mt-6">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            The AI didn&apos;t find any clip-worthy moments in this video.
-          </CardContent>
-        </Card>
+        <div className="mt-6">
+          <EmptyState
+            variant="clip"
+            title="No clips generated"
+            description="The AI didn't find any clip-worthy moments in this video. Try a video with clearer story beats or dialogue."
+          />
+        </div>
       )}
 
       {clips.length > 0 && (
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {clips.map((c) => (
-            <ClipCard key={c.id} clip={c} onDelete={() => deleteClip(c.id)} />
-          ))}
-        </div>
+        <>
+          {/* Controls bar */}
+          {readyClips.length > 1 && (
+            <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+              <label className="flex items-center gap-2 text-sm">
+                <ArrowUpDown className="size-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Sort by:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  className="rounded-md border bg-background px-2 py-1 text-sm"
+                >
+                  <option value="ordinal">Order in source</option>
+                  <option value="score">Virality score</option>
+                  <option value="length">Length</option>
+                </select>
+              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadAllAsZip}
+                disabled={zipping}
+              >
+                {zipping ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Package className="size-4" />
+                )}
+                Download all as ZIP
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {displayClips.map((c) => (
+              <ClipCard key={c.id} clip={c} onDelete={() => deleteClip(c.id)} />
+            ))}
+          </div>
+        </>
       )}
     </>
   );

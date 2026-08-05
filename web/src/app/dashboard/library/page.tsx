@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { getUserOrRedirect } from "@/lib/supabase/session";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent } from "@/components/ui/card";
-import { Video } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { LibraryList } from "./library-list";
 
 export const dynamic = "force-dynamic";
@@ -27,22 +25,14 @@ export default async function LibraryPage() {
       </p>
 
       {list.length === 0 ? (
-        <Card className="mt-8 border-dashed">
-          <CardContent className="py-16 text-center">
-            <Video className="size-8 mx-auto text-muted-foreground" />
-            <p className="mt-3 font-medium">Nothing here yet</p>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Submit a YouTube URL from the dashboard to generate your first
-              shorts.
-            </p>
-            <Link
-              href="/dashboard"
-              className="mt-4 inline-block text-sm font-medium underline underline-offset-2"
-            >
-              Create your first clip →
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="mt-8">
+          <EmptyState
+            variant="video"
+            title="No videos yet"
+            description="Paste a YouTube URL on the dashboard and your first shorts will appear here in a few minutes."
+            cta={{ label: "Create your first clip", href: "/dashboard" }}
+          />
+        </div>
       ) : (
         <LibraryList initialVideos={list} />
       )}

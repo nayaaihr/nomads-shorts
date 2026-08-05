@@ -11,6 +11,7 @@ import {
   Video as VideoIcon,
   ArrowUpRight,
 } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -111,16 +112,13 @@ export default async function DashboardHome() {
         </div>
 
         {(!recentVideos || recentVideos.length === 0) ? (
-          <Card className="mt-4 border-dashed">
-            <CardContent className="py-10 text-center">
-              <VideoIcon className="size-8 mx-auto text-muted-foreground" />
-              <p className="mt-3 font-medium">No videos yet</p>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Your first submission will show up here. Processing takes a
-                few minutes per video.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="mt-4">
+            <EmptyState
+              variant="video"
+              title="No videos yet"
+              description="Your first submission will show up here. Processing takes a few minutes per video."
+            />
+          </div>
         ) : (
           <div className="mt-4 grid gap-3">
             {recentVideos.map((v) => (
