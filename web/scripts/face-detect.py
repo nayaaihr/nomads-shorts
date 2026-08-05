@@ -23,26 +23,36 @@ import json
 import sys
 
 
+def _fail(reason):
+    # stderr goes to fly logs; stdout must stay valid JSON for the Node
+    # caller to parse. Empty list means "fall back to centred crop".
+    print(f"[face-detect] {reason}", file=sys.stderr, flush=True)
+    print(json.dumps([]))
+    sys.exit(0)
+
+
 def main():
     try:
         import cv2  # noqa
-    except ImportError:
-        # OpenCV not installed. Return a stub so the Node caller can fall
-        # back to centred crop without treating this as a hard failure.
-        print(json.dumps([]))
-        sys.exit(0)
+    except ImportError as e:
+        _fail(f"opencv not importable: {e}")
 
     if len(sys.argv) < 3:
-        print(json.dumps([]))
-        sys.exit(0)
+        _fail(f"bad args: {sys.argv}")
 
     video_path = sys.argv[1]
-    timestamps = [float(t) for t in sys.argv[2:]]
+    try:
+        timestamps = [float(t) for t in sys.argv[2:]]
+    except ValueError as e:
+        _fail(f"bad timestamp: {e}")
+
+    import os
+    if not os.path.exists(video_path):
+        _fail(f"video path missing: {video_path}")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        print(json.dumps([]))
-        sys.exit(0)
+        _fail(f"cv2.VideoCapture could not open: {video_path}")
 
     cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     cascade = cv2.CascadeClassifier(cascade_path)

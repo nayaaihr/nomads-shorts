@@ -24,9 +24,15 @@ export async function detectFacesAt(
 ): Promise<FaceSample[]> {
   try {
     const args = [SCRIPT_PATH, videoPath, ...timestamps.map((t) => t.toFixed(3))];
-    const { stdout } = await runCommand(PYTHON, args);
+    const { stdout, stderr } = await runCommand(PYTHON, args);
+    if (stderr && stderr.trim()) {
+      // Python writes fallback reasons to stderr — surface them so we
+      // can see them in fly logs and diagnose why face detection missed.
+      console.warn(`[face-detect stderr] ${stderr.trim()}`);
+    }
     return JSON.parse(stdout);
-  } catch {
+  } catch (err) {
+    console.warn(`[face-detect error] ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }
