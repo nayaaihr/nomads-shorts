@@ -101,16 +101,24 @@ export async function renderVerticalClip(
   // or opencv-python not installed) we fall back to the ffmpeg expression
   // that centers within iw at render time.
   let cropExpr = "crop=ih*9/16:ih:(iw-ih*9/16)/2:0";
+  let cropDebug = "fallback:center";
   const firstWithDims = samples.find((s) => s.w > 0 && s.h > 0);
   if (firstWithDims) {
     const sourceW = firstWithDims.w;
     const sourceH = firstWithDims.h;
     const cropW = Math.round(sourceH * 9 / 16);
+    const facesPerSample = samples.map((s) => s.faces.length);
     const offsetX = computeCropOffsetX(samples, cropW, sourceW);
     if (offsetX !== null) {
       cropExpr = `crop=${cropW}:${sourceH}:${Math.round(offsetX)}:0`;
+      cropDebug = `face-tracked source=${sourceW}x${sourceH} crop=${cropW}x${sourceH}@x=${Math.round(offsetX)} facesPerSample=[${facesPerSample.join(",")}]`;
+    } else {
+      cropDebug = `fallback:no-faces source=${sourceW}x${sourceH} facesPerSample=[${facesPerSample.join(",")}]`;
     }
   }
+  // Emit to stdout so it shows up in `fly logs` right next to the ffmpeg
+  // output for this clip render.
+  console.log(`[reframe] clip=${clipId} ${cropDebug}`);
 
   const filterSteps = [
     cropExpr,
